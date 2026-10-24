@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lab 2FA – Login</title>
+<style>
+  body{font-family:system-ui,sans-serif;max-width:720px;margin:24px auto;padding:0 16px;background:#f6f7f9;color:#1d2330}
+  h1{font-size:22px} section{background:#fff;border:1px solid #dde1e7;border-radius:10px;padding:16px;margin:14px 0}
+  h2{font-size:16px;margin:0 0 10px} input,select,button{font:inherit;padding:8px;margin:4px 0;border-radius:6px;border:1px solid #c5cbd3}
+  button{background:#2f5bd3;color:#fff;border:0;cursor:pointer} button:hover{background:#2449ad}
+  pre{background:#11151c;color:#cfe3ff;padding:10px;border-radius:8px;overflow:auto;font-size:12px;white-space:pre-wrap;word-break:break-all}
+  .row{display:flex;gap:8px;flex-wrap:wrap} img{max-width:220px} .codes{font-family:monospace}
+</style>
+</head>
+<body>
+<h1>🔐 Lab 2FA (TOTP) + Prefect</h1>
+<div class="row"><input id="email" placeholder="email" value="demo@lab.com"><input id="pw" type="password" placeholder="contraseña" value="demo1234"></div>
+
+<section><h2>1. Registro</h2><button onclick="register()">Crear usuario</button></section>
+
+<section><h2>2. Activar 2FA (queda PENDING_VERIFICATION)</h2>
+  <button onclick="setup()">Generar QR</button>
+  <div id="qr"></div></section>
+
+<section><h2>3. Login (usuario + contraseña → pre_auth_token)</h2>
+  <button onclick="login()">Iniciar sesión</button></section>
+
+<section><h2>4. Verificar 2FA (pre_auth_token + código → access_token)</h2>
+  <div class="row"><input id="code" placeholder="123456" maxlength="8">
+  <select id="method"><option value="totp">TOTP (app)</option><option value="backup">Código de respaldo</option></select>
+  <button onclick="verify()">Verificar</button></div></section>
+
+<section><h2>5. Ruta protegida</h2>
+  <button onclick="boveda()">GET /api/boveda-secreta</button>
+  <button onclick="bovedaConPreAuth()" style="background:#8a2b2b">Intentar con pre_auth_token</button></section>
+
+<h2>Respuesta</h2><pre id="out">—</pre>
+
+<script>
+let preAuth = null, access = null;
+const $ = id => document.getElementById(id);
+const creds = () => ({email: $('email').value, password: $('pw').value});
+async function call(method, url, body, token) {
+  const r = await fetch(url, {method, headers: {'Content-Type':'application/json', ...(token ? {Authorization:'Bearer '+token} : {})},
+                              body: body ? JSON.stringify(body) : undefined});
+  const data = await r.json();
+  $('out').textContent = `${r.status} ${method} ${url}\n` + JSON.stringify(data, null, 2);
+  return r.ok ? data : null;
+}
+const register = () => call('POST', '/auth/register', creds());
+async function setup() {
+  const d = await call('POST', '/2fa/setup', creds()); if (!d) return;
+  $('qr').innerHTML = `<img src="data:image/png;base64,${d.qr_png_base64}"><p>Semilla: <b>${d.secret}</b></p>
+    <p>Códigos de respaldo (guárdalos):</p><p class="codes">${d.backup_codes.join(' · ')}</p>`;
+}
+async function login() { const d = await call('POST', '/auth/login', creds()); if (d) preAuth = d.pre_auth_token; }
+async function verify() {
+  const d = await call('POST', '/auth/verify-2fa', {pre_auth_token: preAuth, code: $('code').value, method: $('method').value});
+  if (d) access = d.access_token;
+}
+const boveda = () => call('GET', '/api/boveda-secreta', null, access);
+const bovedaConPreAuth = () => call('GET', '/api/boveda-secreta', null, preAuth);
+</script>
+</body>
+</html>

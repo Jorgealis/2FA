@@ -1,0 +1,8 @@
+prefect>=3,<4
+fastapi
+uvicorn[standard]
+pyjwt
+qrcode[pil]
+bcrypt
+supabase
+python-dotenv
